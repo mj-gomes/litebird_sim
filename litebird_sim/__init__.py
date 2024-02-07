@@ -129,6 +129,10 @@ from .gaindrifts import (
     apply_gaindrift_to_observations,
 )
 
+from .beam_convolution import (
+    add_convolved_sky_to_observations,
+)
+
 from .version import __author__, __version__
 
 
