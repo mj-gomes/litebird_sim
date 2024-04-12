@@ -1755,8 +1755,11 @@ class Simulation:
         if path is None:
             path = self.base_path
 
+        if type(path) is str:
+            path = Path(path)
+
         obs = read_list_of_observations(
-            file_name_list=list((path / subdir_name).glob("**/*.h5")), *args, **kwargs
+            file_name_list=list((path / subdir_name).glob("**/*.h5"))+list((path / subdir_name).glob("**/*.hdf5")), *args, **kwargs
         )
         self.observations = obs
 
