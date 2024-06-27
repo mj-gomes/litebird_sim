@@ -11,6 +11,7 @@ from .scanning import (
     all_compute_pointing_and_orientation,
     RotQuaternion,
 )
+from .detectors import normalize_time_dependent_quaternion
 
 
 def apply_hwp_to_obs(observations, hwp: HWP, pointing_matrix):
@@ -105,6 +106,8 @@ class PointingProvider:
             `hwp_buffer` are not ``None``, the original datatype will be kept unchanged.)
         :return: A pair containing `(pointing_buffer, hwp_buffer)`.
         """
+
+        detector_quat = normalize_time_dependent_quaternion(detector_quat)
 
         assert (np.isscalar(start_time) and np.isscalar(start_time_global)) or (
             isinstance(start_time_global, astropy.time.Time)
