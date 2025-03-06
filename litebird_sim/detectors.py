@@ -304,7 +304,7 @@ class FreqChannelInfo:
 
     def __post_init__(self):
         if self.channel is None:
-            self.channel = f"{self.bandcenter_ghz:.1f} GHz"
+            self.channel = f"{self.bandcenter_ghz:.1f}_GHz"
 
         if self.number_of_detectors > 0:
             # First hypothesis: we have set the number of detectors. Check
