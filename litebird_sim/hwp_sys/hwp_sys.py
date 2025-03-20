@@ -255,6 +255,7 @@ def compute_signal_for_one_sample(
     cos2Xi2Phi,
     sin2Xi2Phi,
 ):
+    
     """Bolometric equation, tod filling for a single (time) sample"""
     d = T * compute_Tterm_for_one_sample_for_tod(mII, mQI, mUI, cos2Xi2Phi, sin2Xi2Phi)
 
@@ -339,6 +340,7 @@ def compute_TQUsolver_for_one_sample(
     Single-frequency case: computes :math:`A^T A` and :math:`A^T d`
     for a single detector, for one (time) sample.
     """
+
     Tterm = compute_Tterm_for_one_sample_for_tod(
         mIIs, mQIs, mUIs, cos2Xi2Phi, sin2Xi2Phi
     )
@@ -353,34 +355,31 @@ def compute_TQUsolver_for_one_sample(
     return Tterm, Qterm, Uterm
 
 def jones_complex_to_polar(j0f, j2f, j4f):
-    for key in [j0f,j2f,j4f]:
+    new_j0f = [[0,0],[0,0]]
+    new_j2f = [[0,0],[0,0]]
+    new_j4f = [[0,0],[0,0]]
+    for i in range(3):
+        key = [j0f,j2f,j4f][i]
         for row in range(2):
             for col in range(2):
                 val = key[row][col]
                 A = np.abs(val)
                 phi = np.angle(val)
-                key[row][col] = [A,phi]
+                if i==0:
+                    new_j0f[row][col] = [A,phi]
+                elif i==1:
+                    new_j2f[row][col] = [A,phi]
+                elif i==2:
+                    new_j4f[row][col] = [A,phi]
     
-    return j0f,j2f,j4f
+    return np.array(new_j0f),np.array(new_j2f),np.array(new_j4f)
 
 def extract_deltas(j0f, j2f, j4f):
     for key in [j0f,j2f,j4f]:
-        key[0][0] -= 1
-        key[1][1] += 1                 
+        key[0,0] -= 1
+        key[1,1] += 1                 
     
     return j0f,j2f,j4f
-
-def expand_jones(j0f,j2f,j4f,alpha):
-
-    output_jones=np.array((2,2),dtype=np.float64)
-    for i in range(2):
-        for j in range(2):
-            output_jones[i,j] =\
-            j0f[i,j][0]\
-            +j2f[i,j][0]*np.cos(2*alpha + 2*j2f[i,j][1])\
-            +j4f[i,j][0]*np.cos(4*alpha + 4*j4f[i,j][1])
-        
-    return output_jones[0,0],output_jones[0,1],output_jones[1,0],output_jones[1,1]
 
 
 @njit(parallel=False)
@@ -391,19 +390,26 @@ def compute_signal_for_one_detector_jones(
     Single-frequency case: compute the signal for a single detector,
     looping over (time) samples.
     """
-
-    j0f,j2f,j4f = extract_deltas(j0f,j2f,j4f)
-    j0f,j2f,j4f = jones_complex_to_polar(j0f,j2f,j4f)
-
+    print("tod_det",len(tod_det))
     for i in prange(len(tod_det)):
 
-        delta_11,delta_12,delta_21,delta_22 = expand_jones(j0f,j2f,j4f,theta[i]-psi[i]-phi)
+        alpha = theta[i]-psi[i]-phi
+        deltas=np.zeros((2,2),dtype=np.float64)
+        for x in range(2):
+            for y in range(2):
+                deltas[x,y] =\
+                j0f[x][y][0]\
+                +j2f[x][y][0]*np.cos(2*alpha + 2*j2f[x][y][1])\
+                +j4f[x][y][0]*np.cos(4*alpha + 4*j4f[x][y][1])
+
+        delta_11,delta_12,delta_21,delta_22 = deltas[0,0],deltas[0,1],deltas[1,0],deltas[1,1]
+
 
         tod_det[i] += compute_signal_for_one_sample(
             T=maps[0, pixel_ind[i]],
             Q=maps[1, pixel_ind[i]],
             U=maps[2, pixel_ind[i]],
-            mII=delta_11-delta_22 +1,
+            mII=delta_11-delta_22+1,
             mQI=delta_11+delta_12,
             mUI=delta_21-delta_12,
             mIQ=delta_11+delta_12,
@@ -418,15 +424,14 @@ def compute_signal_for_one_detector_jones(
             sin2Xi2Phi=sin2Xi2Phi,
         )
 
-
 @njit(parallel=False)
 def compute_ata_atd_for_one_detector_jones(
     ata,
     atd,
     tod,
-    m0f_solver,
-    m2f_solver,
-    m4f_solver,
+    j0f_solver,
+    j2f_solver,
+    j4f_solver,
     pixel_ind,
     theta,
     psi,
@@ -438,12 +443,20 @@ def compute_ata_atd_for_one_detector_jones(
     Single-frequency case: compute :math:`A^T A` and :math:`A^T d`
     for a single detector, looping over (time) samples.
     """
-    j0f,j2f,j4f = extract_deltas(j0f,j2f,j4f)
-    j0f,j2f,j4f = jones_complex_to_polar(j0f,j2f,j4f)
+
 
     for i in prange(len(tod)):
 
-        delta_11,delta_12,delta_21,delta_22 = expand_jones(j0f,j2f,j4f,theta[i]-psi[i]-phi)
+        alpha = theta[i]-psi[i]-phi
+        deltas=np.zeros((2,2),dtype=np.float64)
+        for x in range(2):
+            for y in range(2):
+                deltas[x,y] =\
+                j0f_solver[x][y][0]\
+                +j2f_solver[x][y][0]*np.cos(2*alpha + 2*j2f_solver[x][y][1])\
+                +j4f_solver[x][y][0]*np.cos(4*alpha + 4*j4f_solver[x][y][1])
+
+        delta_11,delta_12,delta_21,delta_22 = deltas[0,0],deltas[0,1],deltas[1,0],deltas[1,1]
 
         Tterm, Qterm, Uterm = compute_TQUsolver_for_one_sample(
             mIIs=delta_11-delta_22 +1,
@@ -492,7 +505,7 @@ def compute_ata_atd_for_one_detector(
     Single-frequency case: compute :math:`A^T A` and :math:`A^T d`
     for a single detector, looping over (time) samples.
     """
-    
+
     for i in prange(len(tod)):
         FourRhoPsiPhi = 4 * (theta[i] - psi[i] - phi)
         TwoRhoPsiPhi = 2 * (theta[i] - psi[i] - phi)
@@ -1006,13 +1019,24 @@ class HwpSys:
                         sin2Xi2Phi=sin2Xi2Phi,
                         phi=phi,
                     )
+
                 elif self.mueller_or_jones=="jones":
+
+                    j0f=cur_det.jones_hwp["0f"]
+                    j2f=cur_det.jones_hwp["2f"]
+                    j4f=cur_det.jones_hwp["4f"]
+
+                    
+                    j0f,j2f,j4f = extract_deltas(j0f,j2f,j4f)
+                    j0f,j2f,j4f = jones_complex_to_polar(j0f,j2f,j4f)
+
+
                     compute_signal_for_one_detector_jones(
                         tod_det=tod,
                         pixel_ind=pix,
-                        j0f=cur_det.jones_hwp["0f"],
-                        j2f=cur_det.jones_hwp["2f"],
-                        j4f=cur_det.jones_hwp["4f"],
+                        j0f=j0f,
+                        j2f=j2f,
+                        j4f=j4f,
                         theta=np.array(
                             cur_hwp_angle / 2, dtype=np.float64
                         ),  # hwp angle returns 2 ^it
@@ -1041,14 +1065,26 @@ class HwpSys:
                         cos2Xi2Phi=cos2Xi2Phi,
                         sin2Xi2Phi=sin2Xi2Phi,
                     )
+                    print(self.ata,self.atd)
+
                 elif self.mueller_or_jones=="jones":
-                        compute_ata_atd_for_one_detector_jones(
+
+                    j0fs=cur_det.jones_hwp_solver["0f"]
+                    j2fs=cur_det.jones_hwp_solver["2f"]
+                    j4fs=cur_det.jones_hwp_solver["4f"]
+
+                    #print(cur_det.jones_hwp)
+                    
+                    j0fs,j2fs,j4fs = extract_deltas(j0fs,j2fs,j4fs)
+                    j0fs,j2fs,j4fs = jones_complex_to_polar(j0fs,j2fs,j4fs)
+
+                    compute_ata_atd_for_one_detector_jones(
                         ata=self.ata,
                         atd=self.atd,
                         tod=tod,
-                        j0f_solver=cur_det.jones_hwp_solver["0f"],
-                        j2f_solver=cur_det.jones_hwp_solver["2f"],
-                        j4f_solver=cur_det.jones_hwp_solver["4f"],
+                        j0f_solver=j0fs,
+                        j2f_solver=j2fs,
+                        j4f_solver=j4fs,
                         pixel_ind=pix,
                         theta=np.array(
                             cur_hwp_angle / 2, dtype=np.float64
@@ -1058,6 +1094,7 @@ class HwpSys:
                         cos2Xi2Phi=cos2Xi2Phi,
                         sin2Xi2Phi=sin2Xi2Phi,
                     )
+                    print(self.ata,self.atd)
 
         del (pix, self.maps)
         if not save_tod:
