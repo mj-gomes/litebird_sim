@@ -59,7 +59,7 @@ def compute_orientation_from_detquat(quat):
 
 def JonesToMueller(jones):
     """
-    Converts a Jones matrix to a Mueller matrix.
+    Converts a Jones matrix to a Mueller matrix. 
     The Jones matrix is assumed to be a 2x2 complex matrix (np.array).
     The Mueller matrix is a 4x4 real matrix.
     Credits to Yuki Sakurai for the function.
